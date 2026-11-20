@@ -4,7 +4,7 @@
   "description": "Employé du Mois et Opération Rideau de fer",
   "start_url": "/",
   "scope": "/",
-  "display": "fullscreen",
+  "display": "standalone",
   "background_color": "#0f1b2e",
   "theme_color": "#0f1b2e",
   "icons": [
