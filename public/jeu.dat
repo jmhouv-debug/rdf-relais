@@ -359,6 +359,7 @@ body.qmcine #qmHud>*:not(#qmCine):not(#qmOv){display:none!important}body.qmcine 
 
 .ginst{display:block;width:100%;margin-top:16px;padding:14px;border-radius:18px;border:2px solid #3cc47c;background:linear-gradient(135deg,#1f7a4c,#145236);color:#fff;font-family:var(--display);font-size:20px;cursor:pointer}.ginst small{display:block;font-size:12.5px;color:#d5f5e3;margin-top:2px}
 .ginsth{margin-top:10px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.1);color:#fff;font-size:14px;line-height:1.6;text-align:left}
+.gacc{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 12px;margin:-4px 0 10px;font:500 12.5px var(--display);color:#cfe0f5}.gacc span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gacc button{flex:none;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font:600 12px var(--display);cursor:pointer}
 </style>
 
 
@@ -4930,7 +4931,7 @@ function accRender(){if(ACCST==='game'){qmGameScreen();return;}if(ACCST==='rdf')
       +(c.pm?card('m','👔','Manager','Tu mets la pression aux employés, tu gères la réputation du magasin et tu accèdes au bureau de la directrice.','Niveau '+(lv.m||v0.LM||1)):'')
       +card('v','🛡️','Vigile','Tu surveilles, tu fouilles et tu fais tomber les voleurs, sans pouvoir être piégé par les managers.',GN[(sv('v')||{}).GR||0]||'Agent')
       +'<div class="accrow"><button class="abtn2" data-a="clsback">Retour</button></div><div class="foot" style="background-image:var(--i-afoot)"></div>';}
-  else{const L=accChars(),GS=qmSel();h+='<div class="gcur"><span>'+(GS==='fm'?'⚡ Opération Rideau de fer':'🏬 Employé du Mois')+'</span><button data-a="gpick">🎮 Changer de jeu</button></div>';if(GS==='fm')h+='<div class="fmi"><b>⚡ Opération Rideau de fer</b> · partie rapide de 10 min. Une équipe de 8 employés, dont 2 traîtres : faites tomber le rideau de fer avant la fin du chrono, et démasquez les traîtres en réunion d\'urgence.<br><small>Version provisoire : les places sans joueur sont tenues par des PNJ.</small></div>';h+='<div class="sais">🏆 SAISON '+SEASON.n+' · Employé de la semaine</div><div class="hd" style="background-image:var(--i-ahead);aspect-ratio:941/510"></div><div class="lab" style="background-image:var(--i-alabel);aspect-ratio:425/88"></div>';
+  else{const L=accChars(),GS=qmSel();h+='<div class="gcur"><span>'+(GS==='fm'?'⚡ Opération Rideau de fer':'🏬 Employé du Mois')+'</span><button data-a="gpick">🎮 Changer de jeu</button></div>';if(ACC&&ACC.id&&!ACC.guest)h+='<div class="gacc"><span>👤 '+esc(ACC.id)+'</span><button data-a="acclogout">Se déconnecter</button></div>';if(GS==='fm')h+='<div class="fmi"><b>⚡ Opération Rideau de fer</b> · partie rapide de 10 min. Une équipe de 8 employés, dont 2 traîtres : faites tomber le rideau de fer avant la fin du chrono, et démasquez les traîtres en réunion d\'urgence.<br><small>Version provisoire : les places sans joueur sont tenues par des PNJ.</small></div>';h+='<div class="sais">🏆 SAISON '+SEASON.n+' · Employé de la semaine</div><div class="hd" style="background-image:var(--i-ahead);aspect-ratio:941/510"></div><div class="lab" style="background-image:var(--i-alabel);aspect-ratio:425/88"></div>';
     if(!L.length)h+='<p class="accn">Aucun personnage pour l\'instant : crée le tien !</p>';
     L.forEach(function(c,i){const cur=STARTED&&i===PLAY_CH;let sv=null;try{sv=readJ('edm_save:'+ACC.id+':'+i)||readJ('edm_save:'+ACC.id+':'+i+'_m')||readJ('edm_save:'+ACC.id+':'+i+'_v');}catch(_){}
       const ib=function(a,k,lab,extra){return '<button class="ib" data-a="'+a+'" data-i="'+i+'" style="background-image:var(--i-'+k+')" aria-label="'+lab+'"'+(extra||'')+'></button>';};
@@ -5001,7 +5002,9 @@ async function cApply(email){try{const r=await cReq('GET','/auth/v1/user',null,C
   else ACCD[email]=Object.assign({s:'',h:'',fn:'',ln:'',age:0,ch:[]},loc||{},{cloud:1});
   accSave();CLOUD.last='';}catch(_){ACCD[email]=Object.assign({s:'',h:'',fn:'',ln:'',age:0,ch:[]},ACCD[email]||{},{cloud:1});accSave();}}
 async function cMigrate(email,pw){try{const r=await cSignup(email,pw);if(r.s==='ok'){ACCD[email].cloud=1;accSave();cPush(true);}}catch(_){}}
-async function cRestore(){try{const o=JSON.parse(localStorage.getItem('edm_cloud')||'null');if(o&&o.rt){CLOUD.rt=o.rt;if(await cFresh()&&ACC&&ACCD[ACC.id])ACCD[ACC.id].cloud=1;}}catch(_){}}
+async function cRestore(){try{const o=JSON.parse(localStorage.getItem('edm_cloud')||'null');if(o&&o.rt){CLOUD.rt=o.rt;if(await cFresh()&&ACC&&ACCD[ACC.id])ACCD[ACC.id].cloud=1;else if(!CLOUD.rt&&ACC&&ACC.id)cRelog(ACC.id);}else if(ACC&&ACC.id&&ACCD[ACC.id]&&ACCD[ACC.id].cloud&&!CLOUD.tok)cRelog(ACC.id);}catch(_){}}
+function cRelog(em){setTimeout(function(){try{if(STARTED||(ACC&&ACC.id&&ACC.id!==em)||CLOUD.tok)return;ACC=null;accSession(null);CLOUD.tok=null;CLOUD.rt=null;CLOUD.exp=0;try{localStorage.removeItem('edm_cloud');}catch(_){}ACCMAIL=em||'';accShow('signup','Le jeu a changé de serveur de comptes : recrée ton compte avec le même e-mail, tes persos de ce téléphone seront gardés. (Déjà recréé sur un autre téléphone ? Appuie sur « Retour » et connecte-toi.)');}catch(_){}},60);}
+function accLogout(){try{const em=ACC&&ACC.id||'';try{cPush(true);}catch(_){}ACC=null;accSession(null);CLOUD.tok=null;CLOUD.rt=null;CLOUD.exp=0;CLOUD.last='';try{localStorage.removeItem('edm_cloud');}catch(_){}ACCMAIL=em;accShow('login','Tu es déconnecté.');}catch(_){}}
 setInterval(function(){cPush(false);},20000);
 try{document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')cPush(false);});}catch(_){}
 function adoptLocal(email){try{const L=ACCD.local;if(!L||!(L.ch||[]).length||email==='local'||(ACCD[email]&&(ACCD[email].ch||[]).length))return false;
@@ -5020,7 +5023,7 @@ async function accAuth(create){if(ACCBUSY)return;const g=function(id){return (($
     if(pw!==pw2){accShow('signup','Les deux mots de passe sont différents.');return;}
     ACCBUSY=true;accShow('signup','Un instant…');
     const r=await cSignup(email,pw);ACCBUSY=false;
-    if(r.s==='ok'){ACCD[email]=Object.assign({s:'',h:'',fn:'',ln:'',age:0,ch:[]},ACCD[email]||{},{cloud:1,ts:0});adoptLocal(email);accSave();await cPush(true);accEnter(email);}
+    if(r.s==='ok'){ACCD[email]=Object.assign({s:'',h:'',fn:'',ln:'',age:0,ch:[]},ACCD[email]||{},{cloud:1,ts:0});adoptLocal(email);accSave();accEnter(email);cPush(true);}
     else if(r.s==='confirm')accShow('login','Compte créé ! Clique sur le lien reçu par e-mail pour le confirmer, puis connecte-toi ici.');
     else if(r.s==='exists')accShow('signup','Ce compte existe déjà : clique sur Retour et connecte-toi.');
     else if(r.s==='net')accShow('signup','Serveur injoignable : vérifie ta connexion et réessaie.');
@@ -5045,6 +5048,7 @@ $('acc').addEventListener('click',function(e){const b=e.target.closest('button')
   else if(a==='solo'||a==='online'){CLSI=i;CLSON=a==='online'?1:0;const go=function(){accPlay(i,CLSON,accRoleOf(i));};if(!cOn()||!(CLOUD.tok||CLOUD.rt))go();else{let done=0;const fin=function(){if(!done){done=1;go();}};setTimeout(fin,4000);sRegister(i).then(fin,fin);}}
   else if(a==='gpick'){accShow('game','');}
   else if(a==='qmplay'){qmLaunch(i);}
+  else if(a==='acclogout'){accLogout();}
   else if(a==='cls'){if(STARTED&&CLSI===PLAY_CH&&b.dataset.r===CLS){lkSet(accChars()[PLAY_CH]);LK.role=CLS;launch();}else accPlay(CLSI,CLSON,b.dataset.r);}
   else if(a==='clsback')accShow('list','');
   else if(a==='resume'){lkSet(accChars()[PLAY_CH]);LK.online=LK.online||0;launch();}
