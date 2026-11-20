@@ -356,6 +356,9 @@ body.qmcine #qmHud>*:not(#qmCine):not(#qmOv){display:none!important}body.qmcine 
 .rdfn{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0;min-height:24px}.rdfn span{padding:3px 9px;border-radius:10px;background:#274a7a;color:#fff;font-size:13px}.rdfn i{color:#9fb3cf;font-size:12.5px}
 .rdfs .abtn{width:100%}.rdfs .abtn:disabled{opacity:.45}
 .rdfl2{display:flex;flex-direction:column;gap:6px;margin:10px 0}.rdfm{padding:8px 10px;border-radius:10px;background:rgba(255,255,255,.08);color:#fff;font:600 15px var(--display)}.rdfm small{color:#ffcf99;font-weight:500}
+
+.ginst{display:block;width:100%;margin-top:16px;padding:14px;border-radius:18px;border:2px solid #3cc47c;background:linear-gradient(135deg,#1f7a4c,#145236);color:#fff;font-family:var(--display);font-size:20px;cursor:pointer}.ginst small{display:block;font-size:12.5px;color:#d5f5e3;margin-top:2px}
+.ginsth{margin-top:10px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.1);color:#fff;font-size:14px;line-height:1.6;text-align:left}
 </style>
 
 
@@ -5609,7 +5612,19 @@ function qmGameScreen(){const a=$('acc');a.hidden=false;$('creator').hidden=true
   a.innerHTML='<div class="accw"><h2 class="ttl" style="text-align:center;margin:6px 0 4px">À quoi tu joues ?</h2><div class="gpick">'
     +'<button class="gcard" data-a="gplay" data-g="edm"><b>🏬 Employé du Mois</b><span>Le jeu de carrière : bosse ou fais le branleur, vole, balance tes collègues, deviens manager… Le magasin continue de vivre entre deux connexions.</span></button>'
     +'<button class="gcard rf" data-a="gplay" data-g="fm"><b>⚡ Opération Rideau de fer<i>NOUVEAU</i></b><span>Partie rapide de 10 min à 8 employés : sabotez le magasin jusqu\'à faire tomber le rideau de fer, échappez à la directrice… et démasquez les 2 traîtres cachés parmi vous.</span></button>'
-    +'</div></div>';}
+    +'</div>'+qmInstBtn()+'</div>';
+  const ib=a.querySelector('#qmInst');if(ib)ib.addEventListener('click',qmInstall);}
+/* ---- bouton « Installer l'appli » (version servie par Cloudflare, pas dans itch.io ni l'aperçu) ---- */
+try{window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__bip=e;});window.addEventListener('appinstalled',function(){window.__bip=null;window.__inst=1;try{if(ACCST==='game')qmGameScreen();}catch(_){}});}catch(_){}
+function qmStandalone(){try{return window.matchMedia('(display-mode: standalone)').matches||window.matchMedia('(display-mode: fullscreen)').matches||navigator.standalone===true;}catch(_){return false;}}
+function qmInstOk(){try{if(window.__inst||qmStandalone()||window.top!==window)return false;if(!(location.protocol==='https:'||location.hostname==='localhost'))return false;return !/claude|itch|usercontent|anthropic/i.test(location.hostname);}catch(_){return false;}}
+function qmInstBtn(){if(!qmInstOk())return '';return '<button class="ginst" id="qmInst">📲 Installer l\'appli<small>Une icône sur ton écran d\'accueil, comme une vraie appli</small></button><div class="ginsth" id="qmInstH" hidden></div>';}
+function qmIOS(){return /iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);}
+async function qmInstall(){const h=$('qmInstH');
+  if(window.__bip){const e=window.__bip;window.__bip=null;try{await e.prompt();const r=await e.userChoice;if(r&&r.outcome==='accepted'){window.__inst=1;if(h){h.hidden=false;h.innerHTML='✅ C\'est installé ! Lance le jeu depuis la nouvelle icône sur ton écran d\'accueil.';}return;}}catch(_){}}
+  if(!h)return;h.hidden=false;
+  h.innerHTML=qmIOS()?'<b>Sur iPhone :</b><br>1. Appuie sur le bouton <b>Partager</b> <span style="font-size:18px">⬆️</span> en bas de Safari.<br>2. Choisis <b>« Sur l\'écran d\'accueil »</b>, puis <b>Ajouter</b>.'
+    :'<b>Pour installer :</b><br>1. Appuie sur les <b>⋮</b> en haut à droite de Chrome.<br>2. Choisis <b>« Installer l\'application »</b> ou <b>« Ajouter à l\'écran d\'accueil »</b>.';}
 
 /* ===================== OPÉRATION RIDEAU DE FER : salles en ligne (relais Cloudflare) =====================
    Une salle d'attente commune (rdf-lobby) + 3 salles de jeu (rdf-s1..3). L'hôte (le plus ancien joueur de la salle) fait tourner
