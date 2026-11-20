@@ -6,5 +6,9 @@
   "durable_objects": {
     "bindings": [{ "name": "ROOMS", "class_name": "Room" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "edm-db", "database_id": "2b9260c5-e693-4f51-b4ff-0b1c2ee75ef1" }
+  ],
+  "triggers": { "crons": ["7 * * * *"] }
 }
