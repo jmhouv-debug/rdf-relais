@@ -1,0 +1,30 @@
+{
+  "name": "Employé du Mois",
+  "short_name": "Employé du Mois",
+  "description": "Employé du Mois et Opération Rideau de fer",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "background_color": "#0f1b2e",
+  "theme_color": "#0f1b2e",
+  "icons": [
+    {
+      "src": "/edm-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/edm-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/edm-icon-mask.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
