@@ -61,6 +61,10 @@ async function ensure(db) {
     db.prepare("CREATE INDEX IF NOT EXISTS edm_players_season ON edm_players(season, role)"),
     db.prepare("CREATE TABLE IF NOT EXISTS edm_hall (season INTEGER PRIMARY KEY, user_id TEXT, slot INTEGER, name TEXT, actions INTEGER, salary INTEGER, minutes INTEGER, claimed INTEGER NOT NULL DEFAULT 0)")
   ]);
+  // v2 (postes joueurs) : colonnes ajoutees sans toucher aux donnees existantes
+  const alt = ['ps REAL NOT NULL DEFAULT 0', 'ps_slot INTEGER NOT NULL DEFAULT 0', 'lv INTEGER NOT NULL DEFAULT 1', 'sb INTEGER NOT NULL DEFAULT 0', 'promoted_at INTEGER', 'm_seen INTEGER'];
+  for (const c of alt) { try { await db.prepare('ALTER TABLE edm_players ADD COLUMN ' + c).run(); } catch (e) {} }
+  await db.prepare('CREATE TABLE IF NOT EXISTS edm_meta (k TEXT PRIMARY KEY, v TEXT)').run();
   READY = true;
 }
 
@@ -188,7 +192,7 @@ async function seasonNow(db) {
 }
 function pl(p) { // même forme que Supabase
   if (!p) return null;
-  return { user_id: p.user_id, slot: p.slot, name: p.name, season: p.season, role: p.role, promoted: !!p.promoted, reputation: p.reputation, actions: p.actions, salary: p.salary, minutes: p.minutes, last_seen: new Date(p.last_seen).toISOString(), day_off_week: p.day_off_week, day_off_until: p.day_off_until ? new Date(p.day_off_until).toISOString() : null };
+  return { user_id: p.user_id, slot: p.slot, name: p.name, season: p.season, role: p.role, promoted: !!p.promoted, reputation: p.reputation, actions: p.actions, salary: p.salary, minutes: p.minutes, last_seen: new Date(p.last_seen).toISOString(), day_off_week: p.day_off_week, day_off_until: p.day_off_until ? new Date(p.day_off_until).toISOString() : null, promoted_at: p.promoted_at || null, m_seen: p.m_seen || null };
 }
 const clamp = function (v, a, b) { v = Number(v); if (!isFinite(v)) v = 0; return Math.max(a, Math.min(b, v)); };
 
@@ -202,11 +206,9 @@ async function rpc(db, fn, uid, a) {
       return pl(await db.prepare('SELECT * FROM edm_players WHERE user_id=? AND slot=?').bind(uid, slot).first());
     }
     const c = await db.prepare("SELECT SUM(CASE WHEN role='m' AND promoted=0 THEN 1 ELSE 0 END) mg, SUM(CASE WHEN role='v' THEN 1 ELSE 0 END) vg FROM edm_players WHERE season=?").bind(s.n).first();
-    const r = Math.random();
-    let rl = r < .65 ? 'e' : r < .85 ? 'm' : 'v';
-    if (rl === 'm' && (c.mg || 0) >= 3) rl = 'e';
-    if (rl === 'v' && (c.vg || 0) >= 2) rl = 'e';
-    await db.prepare("INSERT INTO edm_players(user_id,slot,name,season,role,last_seen) VALUES (?,?,?,?,?,?) ON CONFLICT(user_id,slot) DO UPDATE SET season=excluded.season, role=excluded.role, promoted=0, reputation=100, actions=0, salary=0, minutes=0, last_seen=excluded.last_seen, name=excluded.name, day_off_until=NULL").bind(uid, slot, name, s.n, rl, Date.now()).run();
+    let rl = Math.random() < .78 ? 'e' : 'v';
+    if (rl === 'v' && (c.vg || 0) >= VIG_MAX) rl = 'e';
+    await db.prepare("INSERT INTO edm_players(user_id,slot,name,season,role,last_seen) VALUES (?,?,?,?,?,?) ON CONFLICT(user_id,slot) DO UPDATE SET season=excluded.season, role=excluded.role, promoted=0, reputation=100, actions=0, salary=0, minutes=0, last_seen=excluded.last_seen, name=excluded.name, day_off_until=NULL, ps=0, ps_slot=0, promoted_at=NULL, m_seen=NULL").bind(uid, slot, name, s.n, rl, Date.now()).run();
     return pl(await db.prepare('SELECT * FROM edm_players WHERE user_id=? AND slot=?').bind(uid, slot).first());
   }
   if (fn === 'edm_beat') {
@@ -214,13 +216,20 @@ async function rpc(db, fn, uid, a) {
     const p = await db.prepare('SELECT * FROM edm_players WHERE user_id=? AND slot=? AND season=?').bind(uid, slot, s.n).first();
     if (!p) throw new Error('personnage inconnu');
     const now = Date.now(), el = Math.min(120, (now - p.last_seen) / 1000), m = p.role === 'm';
-    await db.prepare('UPDATE edm_players SET last_seen=?, reputation=?, actions=?, salary=?, minutes=? WHERE user_id=? AND slot=?').bind(
+    const sl = clamp(a.p_sl, 0, 1e7) | 0, ps = clamp(a.p_ps, 0, 1e6);
+    await db.prepare('UPDATE edm_players SET last_seen=?, reputation=?, actions=?, salary=?, minutes=?, ps=?, ps_slot=?, lv=?, sb=?, m_seen=? WHERE user_id=? AND slot=?').bind(
       now,
       m ? clamp(a.p_rep === undefined || a.p_rep === null ? p.reputation : a.p_rep, 0, 100) : p.reputation,
       p.actions + (m ? Math.round(clamp(a.p_actions, 0, 5)) : 0),
       p.salary + Math.round(clamp(a.p_salary, 0, 50)),
       p.minutes + (m ? Math.round(el / 60) : 0),
+      m ? p.ps : (sl ? ps : p.ps), m ? p.ps_slot : (sl || p.ps_slot), clamp(a.p_lv, 1, 99) | 0, clamp(a.p_sb, 0, 1e7) | 0,
+      m ? (p.m_seen || now) : p.m_seen,
       uid, slot).run();
+    if (typeof a.p_npc === 'string' && a.p_npc.length < 2000) {
+      try { const L = JSON.parse(a.p_npc); if (Array.isArray(L) && L.length) await db.prepare("INSERT INTO edm_meta(k,v) VALUES ('npc',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(JSON.stringify({ t: now, l: L.slice(0, 6).map(function (x) { return { n: String(x.n || '').slice(0, 20), s: clamp(x.s, 0, 100) }; }) })).run(); } catch (e) {}
+    }
+    try { await drawCheck(db); } catch (e) {}
     return pl(await db.prepare('SELECT * FROM edm_players WHERE user_id=? AND slot=?').bind(uid, slot).first());
   }
   if (fn === 'edm_day_off') {
@@ -248,10 +257,55 @@ async function rpc(db, fn, uid, a) {
   if (fn === 'edm_set_role') {
     const s = await seasonNow(db), slot = clamp(a.p_slot, 0, 99) | 0, role = String(a.p_role || '');
     if (['e', 'm', 'v'].indexOf(role) < 0) throw new Error('rôle invalide');
-    await db.prepare("UPDATE edm_players SET reputation=CASE WHEN ?='m' AND role<>'m' THEN 100 ELSE reputation END, role=?, promoted=? WHERE user_id=? AND slot=? AND season=?").bind(role, role, role === 'm' && a.p_promoted ? 1 : 0, uid, slot, s.n).run();
+    await db.prepare("UPDATE edm_players SET reputation=CASE WHEN ?='m' AND role<>'m' THEN 100 ELSE reputation END, promoted_at=CASE WHEN ?='m' AND role<>'m' THEN ? ELSE promoted_at END, m_seen=CASE WHEN ?='m' AND role<>'m' THEN ? ELSE m_seen END, role=?, promoted=? WHERE user_id=? AND slot=? AND season=?").bind(role, role, Date.now(), role, Date.now(), role, role === 'm' && a.p_promoted ? 1 : 0, uid, slot, s.n).run();
     return pl(await db.prepare('SELECT * FROM edm_players WHERE user_id=? AND slot=?').bind(uid, slot).first());
   }
+  if (fn === 'edm_managers') {
+    const s = await seasonNow(db), now = Date.now();
+    const r = await db.prepare("SELECT name,reputation,last_seen,promoted_at,m_seen,user_id FROM edm_players WHERE season=? AND role='m' ORDER BY reputation ASC LIMIT 12").bind(s.n).all();
+    return r.results.map(function (p) { return { name: p.name, reputation: p.reputation, online: now - p.last_seen < ONLINE_MS, prot: isProt(p, now), mine: p.user_id === uid }; });
+  }
+  if (fn === 'edm_hit_mgr') {
+    const s = await seasonNow(db), now = Date.now(), name = String(a.p_name || '').slice(0, 20), dmg = clamp(a.p_dmg, 0, 30);
+    const p = await db.prepare("SELECT * FROM edm_players WHERE season=? AND role='m' AND name=? ORDER BY last_seen ASC LIMIT 1").bind(s.n, name).first();
+    if (!p || p.user_id === uid || now - p.last_seen < ONLINE_MS || isProt(p, now) || !dmg) return null;
+    const rep = Math.max(0, p.reputation - dmg * 0.5);
+    await db.prepare('UPDATE edm_players SET reputation=? WHERE user_id=? AND slot=?').bind(rep, p.user_id, p.slot).run();
+    return { name: p.name, reputation: rep };
+  }
   return undefined;
+}
+
+/* ---------- postes joueurs : 6 managers, tirage toutes les 3 h 30, protection de 12 h ---------- */
+const MGR_MAX = 6, VIG_MAX = 5, ONLINE_MS = 180000, PROT_MS = 12 * 3600000, SLOT_MS = 3.5 * 3600000;
+function isProt(p, now) { return !p.m_seen && p.promoted_at && now - p.promoted_at < PROT_MS; }
+async function drawCheck(db) {
+  const now = Date.now(), slot = Math.floor(now / SLOT_MS);
+  const m = await db.prepare("SELECT v FROM edm_meta WHERE k='draw'").first();
+  const last = m ? +m.v : 0;
+  if (last >= slot) return;
+  const ok = await db.prepare("INSERT INTO edm_meta(k,v) VALUES ('draw',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v WHERE CAST(edm_meta.v AS INTEGER) < ?").bind(String(slot), slot).run();
+  if (!ok.meta || !ok.meta.changes) return; // un autre appel s'en occupe
+  const s = await seasonNow(db);
+  // promu jamais venu en 12 h : il perd son poste
+  await db.prepare("UPDATE edm_players SET role='e', promoted=0, reputation=100, promoted_at=NULL WHERE season=? AND role='m' AND m_seen IS NULL AND promoted_at IS NOT NULL AND ?-promoted_at>=?").bind(s.n, now, PROT_MS).run();
+  if (!last) return; // premiere fois : on note juste le creneau
+  const w = await db.prepare("SELECT * FROM edm_players WHERE season=? AND role='e' AND ps_slot=? AND ps>=1 ORDER BY ps DESC, lv DESC, sb DESC, last_seen DESC LIMIT 1").bind(s.n, slot - 1).first();
+  if (!w) return;
+  const ms = (await db.prepare("SELECT * FROM edm_players WHERE season=? AND role='m'").bind(s.n).all()).results;
+  const st = [];
+  // 6 postes en tout (PNJ + joueurs) : on compare toutes les barres, la plus basse saute
+  const can = ms.filter(function (p) { return !isProt(p, now); });
+  can.sort(function (a, b) { return (a.reputation - b.reputation) || ((now - b.last_seen) - (now - a.last_seen)); });
+  let npcMin = 101;
+  try { const r = await db.prepare("SELECT v FROM edm_meta WHERE k='npc'").first(); const o = r ? JSON.parse(r.v) : null; if (o && now - o.t < PROT_MS && Array.isArray(o.l)) o.l.forEach(function (x) { if (x.s < npcMin) npcMin = x.s; }); } catch (e) {}
+  if (ms.length >= MGR_MAX && !can.length) return;
+  if (can.length && (ms.length >= MGR_MAX || can[0].reputation < npcMin)) {
+    const o = can[0];
+    st.push(db.prepare("UPDATE edm_players SET role='e', promoted=0, reputation=100, promoted_at=NULL, m_seen=NULL WHERE user_id=? AND slot=?").bind(o.user_id, o.slot));
+  }
+  st.push(db.prepare("UPDATE edm_players SET role='m', promoted=1, reputation=100, promoted_at=?, m_seen=NULL, ps=0 WHERE user_id=? AND slot=?").bind(now, w.user_id, w.slot));
+  await db.batch(st);
 }
 
 /* ---------- absences (tâche horaire) ---------- */
@@ -259,9 +313,8 @@ async function sweep(db) {
   await ensure(db);
   await seasonNow(db);
   const now = Date.now();
+  try { await drawCheck(db); } catch (e) {}
   await db.batch([
-    db.prepare("UPDATE edm_players SET reputation=MAX(0, 100 - 100.0*(?-last_seen)/86400000.0) WHERE role='m' AND (day_off_until IS NULL OR day_off_until<?) AND ?-last_seen>600000").bind(now, now, now),
-    db.prepare("UPDATE edm_players SET role='e', promoted=0, reputation=100 WHERE role='m' AND ?-last_seen>86400000 AND (day_off_until IS NULL OR day_off_until<?)").bind(now, now),
     db.prepare('DELETE FROM sessions WHERE exp<?').bind(now)
   ]);
 }
